@@ -13,11 +13,13 @@ contract Event {
 
     /**
      * enum containing 'bid' state
-     * close:       initial state
-     * open:        bidding commences
-     * buy:         bidding closed and buying enabled
+     * initial:             initial state before bidding
+     * bidding:             bidding state when bid commences
+     * buyAndRefund:        buy and refund state after bid closes
+     * sellerEventEnd:      seller declare end of event
+     * platformEventEnd:    platform declare end of event
      */
-    enum bidState { close, open, buy }
+    enum eventState { initial, bidding, buyAndRefund, sellerEventEnd, platformEventEnd }
 
     /**
      * param title          title of event
@@ -27,7 +29,7 @@ contract Event {
      * param ticketsLeft    event tickets left 
      * param priceOfTicket  price of ticket
      * param seller         organiser / seller of event ticket   
-     * param bidState       state of bidding: close, open, buy
+     * param eventState     state of event: initial, bidding, buyAndRefund, sellerEventEnd, platformEventEnd
      * param firstTicketId  id of first ticket sold
      */
     struct eventObj {
@@ -38,7 +40,7 @@ contract Event {
         uint256 ticketsLeft;
         uint256 priceOfTicket;
         address seller;
-        bidState state;
+        eventState state;
         uint256 firstTicketId;
     }
 
@@ -80,7 +82,7 @@ contract Event {
             capacity,
             priceOfTicket,
             seller,
-            bidState.close,
+            eventState.initial,
             0
         );
 
@@ -190,11 +192,11 @@ contract Event {
     }
 
     /**
-     * get bid state of event
+     * get state of event
      *
      * param eventId    id of event
      */
-    function getEventBidState(uint256 eventId) public view validEventId(eventId) returns (bidState) {
+    function getEventState(uint256 eventId) public view validEventId(eventId) returns (eventState) {
         return events[eventId].state;
     }
 
@@ -208,13 +210,13 @@ contract Event {
     }
 
     /**
-     * set bid state of event
+     * set state of event
      *
      * param eventId    id of event
-     * param bstate     bidstate
+     * param estate     eventstate
      */
-    function setEventBidState(uint256 eventId, bidState bstate) public validEventId(eventId) {
-        events[eventId].state = bstate;
+    function setEventState(uint256 eventId, eventState estate) public validEventId(eventId) {
+        events[eventId].state = estate;
     }
 
     /**
@@ -235,17 +237,6 @@ contract Event {
      */
     function setEventTicketsLeft(uint256 eventId, uint256 ticketsLeft) public validEventId(eventId) {
         events[eventId].ticketsLeft = ticketsLeft;
-    }
-
-    /**
-     * delete event after it ended
-     *
-     * param eventId    id of event
-     */
-    function endEvent(uint256 eventId) public validEventId(eventId) {
-        // return of deposit value done at Platform
-        // only call this function at Platform
-        delete events[eventId];
     }
 
     // get latest event id

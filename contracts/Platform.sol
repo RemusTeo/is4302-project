@@ -53,7 +53,7 @@ contract Platform {
         _;
     }
 
-    /*Ensure caller is a verified seller*/
+    /* Ensure caller is a verified seller */
     modifier isOrganiser() {
         require(accountContract.viewAccountState(msg.sender) == accountContract.getVerifiedStatus(),"You are not a verified seller");
         _;
@@ -74,6 +74,7 @@ contract Platform {
         string memory venue,
         uint256 year, uint256 month, uint256 day, uint256 hour, uint256 minute, uint256 second,
         uint256 capacity,
+        uint256 ticketsLeft,
         uint256 priceOfTicket,
         address seller) public payable isOrganiser() returns (uint256) {
 
@@ -81,7 +82,7 @@ contract Platform {
         require(msg.value >= calMinimumDeposit(capacity,priceOfTicket) * 1 wei, "Insufficient deposits. Need deposit minimum (capacity * priceOfTicket)/2 * 50000 wei to list event.");
 
         uint256 newEventId = eventContract.createEvent(title, venue, year, month, day, hour, minute, second, capacity, priceOfTicket, seller);
-        sellerDepositedValue[msg.sender] = msg.value;
+
         return newEventId;
     }
 
@@ -92,9 +93,9 @@ contract Platform {
      */
     function commenceBidding(uint256 eventId) public {
         require(msg.sender == eventContract.getEventSeller(eventId), "Only seller can commence bidding");
-        require(eventContract.getEventBidState(eventId) == Event.bidState.close, "Event already open for bidding");
+        require(eventContract.getEventState(eventId) == Event.eventState.initial, "Event already open for bidding");
 
-        eventContract.setEventBidState(eventId, Event.bidState.open);
+        eventContract.setEventState(eventId,  Event.eventState.bidding);
         emit BidCommenced(eventId);
     }
 
@@ -139,6 +140,7 @@ contract Platform {
         emit BidPlaced(eventId, msg.sender, tokenBid);
     }
 
+    event test(uint256 qty);
     /**
      * allow buyer to update bid
      *
@@ -147,8 +149,13 @@ contract Platform {
      */
     function updateBid(uint256 eventId, uint256 tokenBid) public isBuyer() {
         bidInfo memory currentBidInfo = addressBiddings[msg.sender][eventId];
-        require(currentBidInfo.quantity != 0, "Cant update bid without placing bid first");
+        bidInfo memory emptyBidInfo = bidInfo(0, 0, 0, 0);
+        require(currentBidInfo.quantity != emptyBidInfo.quantity, "Cant update bid without placing bid first");
+        //require(currentBidInfo.quantity != 0, "Cant update bid without placing bid first");
+        //require(addressBiddings[msg.sender][eventId].quantity > 0, "Cant update bid without placing bid first");
+    
         require(tokenBid > currentBidInfo.tokenPerTicket, "New token bid must be higher than current bid");
+        
 
         // Calculate additional tokens needed and transfer event tokens
         uint256 tokenDifference = tokenBid - currentBidInfo.tokenPerTicket;
@@ -206,7 +213,6 @@ contract Platform {
                     ticketContract.transferTicket(ticketId, bidderList[i]); 
                     ticketId++;
                     ticketsLeft--;
-                    //burnToken()
                 } else { 
                     // return ETH back to unsuccessful bidders when ticketsLeft == 0 
                     address payable recipient = address(uint168(bidderList[i]));
@@ -262,14 +268,11 @@ contract Platform {
         uint256 totalPrice = eventContract.getEventTicketPrice(eventId) * quantity;
         require(msg.value >= totalPrice, "Buyer has insufficient ETH to buy tickets");
 
-        // Set remaining tickets after someone buys ticket(s)
-        uint256 remainingTickets = eventContract.getEventTicketsLeft(eventId) - quantity;
-        eventContract.setEventTicketsLeft(eventId,remainingTickets);
-
         // Transfer ticket
         uint256 firstTicketId = eventContract.getEventFirstTicketId(eventId);
         uint256 lastTicketId = firstTicketId + eventContract.getEventCapacity(eventId) - 1;
 
+        // Start from back because high chance front tickets already given to successful bidders
         for (lastTicketId; lastTicketId >= firstTicketId; lastTicketId--) {
             if (ticketContract.getTicketOwner(lastTicketId) == address(this)) {
                 ticketContract.transferTicket(lastTicketId, msg.sender);
@@ -293,17 +296,8 @@ contract Platform {
     function endEvent(uint256 eventId) public isOrganiser() {
         address seller = eventContract.getEventSeller(eventId);
         require(seller == msg.sender, "Only original seller can end event");
-        msg.sender.transfer(sellerDepositedValue[seller]);
-
-        // Calculating ticket sales
-        uint256 numOfTicketsSold = eventContract.getEventCapacity(eventId) - eventContract.getEventTicketsLeft(eventId);
-        uint256 ticketSales = numOfTicketsSold * eventContract.getEventTicketPrice(eventId);
-
-        // Platform keeps 5% commission of ticket sales, rest goes to Seller when event ends
-        uint256 sellerProfits = 95 * ticketSales /100;
-        msg.sender.transfer(sellerProfits);
-
         eventContract.endEvent(eventId);
+        msg.sender.transfer(sellerDepositedValue[seller]);
     }
 
     /**
@@ -316,9 +310,4 @@ contract Platform {
         // 1USD = 50,000 wei
         return (capacity * priceOfTicket)/2 * 50000;
     }
-
-    function getPlatformAddr() public view returns(address) {
-        return address(this);
-    }
-
 }
