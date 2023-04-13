@@ -55,7 +55,7 @@ contract Platform {
         _;
     }
 
-    /*Ensure caller is a verified seller*/
+    /* Ensure caller is a verified seller*/
     modifier isOrganiser() {
         require(accountContract.viewAccountState(msg.sender) == accountContract.getVerifiedStatus(),"You are not a verified seller");
         _;
@@ -369,6 +369,19 @@ contract Platform {
     function calMinimumDeposit(uint256 capacity, uint256 priceOfTicket) public pure returns(uint256){
         // 1USD = 50,000 wei
         return (capacity * priceOfTicket)/2 * 50000;
+    }
+
+    /**
+     * owner withdraw ETH from contract
+     *
+     * param amt amount of ETH to withdraw
+     */
+    function withdraw(uint256 amt) public payable {
+        require(msg.sender == owner, "Only owner can withdraw");
+        require(address(this).balance >= amt, "Not enough ETH in contract");
+        
+        address payable recipient = address(uint168(owner));
+        recipient.transfer(amt);
     }
 
 }
